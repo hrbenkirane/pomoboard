@@ -14,6 +14,7 @@
     <button id="board-menu" class="icon-btn" title="Board options">⋯</button>
     <input id="search" type="search" placeholder="Filter tasks…">
     <div class="spacer"></div>
+    <a id="report" href="/api/report.xlsx" download title="Download pomodoros for today, this week and this month as an Excel file">📊 Excel report</a>
     <button id="timer-pill" title="Timer">
       <span id="pill-icon">▶</span>
       <span id="pill-time">25:00</span>
@@ -42,9 +43,11 @@
         <label>Long break (min)<input type="number" min="1" max="120" data-setting="longBreak"></label>
         <label>Long break every<input type="number" min="1" max="12" data-setting="longEvery"></label>
       </div>
+      <button id="tp-test" type="button">🔔 Test alarm sound</button>
     </details>
   </section>
 
+  <div id="legend"></div>
   <main id="board"></main>
 
   <div id="menu" hidden></div>

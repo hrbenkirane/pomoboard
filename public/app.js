@@ -1,6 +1,12 @@
 'use strict';
 
 const COLORS = ['yellow', 'orange', 'red', 'pink', 'purple', 'blue', 'cyan', 'green', 'gray', 'white'];
+// What each colour means. Editable per board from the legend under the top bar.
+const DEFAULT_LABELS = {
+  yellow: '1pm', orange: '2pm', red: '3pm', pink: '4pm', purple: '5pm',
+  blue: '6pm', cyan: '7pm', green: '8pm', gray: '9pm', white: '10pm',
+};
+const colorLabel = c => ({ ...DEFAULT_LABELS, ...((state.board && state.board.colorLabels) || {}) })[c] || c;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -172,6 +178,24 @@ function columnMenu(anchor, col) {
   ]);
 }
 
+async function renameColor(c) {
+  const name = await ask(`What does ${c} mean?`, colorLabel(c));
+  if (name === null) return;
+  const colorLabels = Object.fromEntries(COLORS.map(k => [k, k === c ? name : colorLabel(k)]));
+  state.board = await api('PATCH', `/api/boards/${state.board._id}`, { colorLabels });
+  state.boards[state.boards.findIndex(b => b._id === state.board._id)] = state.board;
+  renderBoard();
+  if (dlg.open) renderSwatches();
+}
+
+function renderLegend() {
+  $('#legend').replaceChildren(
+    el('span', { class: 'legend-title' }, 'Colours:'),
+    ...COLORS.map(c => el('button', {
+      class: `chip c-${c}`, title: `${c} — click to rename`, onclick: () => renameColor(c),
+    }, colorLabel(c))));
+}
+
 // ---------- board rendering ----------
 function columnTasks(col) {
   const list = state.tasks.filter(t => t.columnId === col.id);
@@ -195,6 +219,7 @@ function cardEl(t) {
   ].filter(Boolean);
   const card = el('article', {
     class: `card c-${t.color}${T.taskId === t._id ? ' active' : ''}`, draggable: 'true', 'data-id': t._id,
+    title: colorLabel(t.color),
     onclick: () => openTask(t),
     ondragstart: e => {
       dragId = t._id;
@@ -214,6 +239,7 @@ function cardEl(t) {
 }
 
 function renderBoard() {
+  renderLegend();
   const root = $('#board');
   const scroll = { x: root.scrollLeft, cols: Object.fromEntries($$('.cards', root).map(c => [c.dataset.col, c.scrollTop])) };
   root.replaceChildren(...state.board.columns.map(col => {
@@ -288,9 +314,9 @@ let editing = null; // { id, color, subtasks, minutes }
 
 function renderSwatches() {
   $('#task-colors').replaceChildren(...COLORS.map(c => el('button', {
-    class: `swatch c-${c}${editing.color === c ? ' on' : ''}`, title: c, type: 'button',
+    class: `swatch-opt${editing.color === c ? ' on' : ''}`, title: c, type: 'button',
     onclick: () => { editing.color = c; renderSwatches(); },
-  })));
+  }, el('span', { class: `swatch c-${c}` }), el('span', { class: 'swatch-label' }, colorLabel(c)))));
 }
 
 function renderSubs() {
@@ -397,20 +423,36 @@ const phaseMs = () => {
   return (T.phase === 'work' ? s.pomodoro : T.phase === 'long' ? s.longBreak : s.shortBreak) * 60000;
 };
 
-function beep() {
+// One shared audio context, unlocked by the first click so the alarm can play later without a gesture.
+let audioCtx = null;
+function audio() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.25, 0.5].forEach((at, i) => {
-      const osc = ctx.createOscillator(), gain = ctx.createGain();
-      osc.frequency.value = [660, 880, 1100][i];
-      gain.gain.setValueAtTime(0.25, ctx.currentTime + at);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + at + 0.22);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(ctx.currentTime + at);
-      osc.stop(ctx.currentTime + at + 0.24);
-    });
-    setTimeout(() => ctx.close(), 1500);
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
   } catch { /* audio is optional */ }
+  return audioCtx;
+}
+document.addEventListener('click', audio, true);
+
+// Alarm: a four-note chime played three times (about 4 seconds).
+function beep() {
+  const ctx = audio();
+  if (!ctx) return;
+  const notes = [784, 988, 1175, 1568];
+  for (let rep = 0; rep < 3; rep++) {
+    notes.forEach((freq, i) => {
+      const at = ctx.currentTime + 0.05 + rep * 1.3 + i * 0.22;
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.5, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.45);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.5);
+    });
+  }
 }
 
 function notify(msg) {
@@ -507,7 +549,9 @@ function renderTimer() {
   $('#tp-stop').textContent = isBreak ? 'Skip break' : 'Stop & log';
   $('#tp-stop').disabled = !active;
   $$('#timer-panel .tabs button').forEach(b => b.classList.toggle('on', b.dataset.mode === T.mode));
-  $('#tp-stats').textContent = `Today: 🍅 ${state.stats.pomodoros} · ${state.stats.seconds ? fmtDur(state.stats.seconds) : '0m'} focused`;
+  const st = state.stats;
+  $('#tp-stats').textContent = `🍅 Today ${st.pomodoros} · Week ${st.week ? st.week.pomodoros : 0} · Month ${st.month ? st.month.pomodoros : 0}` +
+    ` — ${st.seconds ? fmtDur(st.seconds) : '0m'} focused today`;
   document.title = active ? `${clock} · ${T.taskName || (isBreak ? 'Break' : 'Focus')}` : 'PomoBoard';
 }
 
@@ -516,11 +560,24 @@ function tick() {
   renderTimer();
 }
 
+// Start of today, of this week (Monday) and of this month, in local time.
+function periodQuery() {
+  const day = new Date();
+  day.setHours(0, 0, 0, 0);
+  const week = new Date(day);
+  week.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+  const month = new Date(day.getFullYear(), day.getMonth(), 1);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return `today=${day.getTime()}&week=${week.getTime()}&month=${month.getTime()}&tz=${encodeURIComponent(tz)}`;
+}
+
 async function loadStats() {
-  const since = new Date().setHours(0, 0, 0, 0);
-  state.stats = await api('GET', `/api/stats?since=${since}`);
+  state.stats = await api('GET', `/api/stats?${periodQuery()}`);
   renderTimer();
 }
+
+$('#report').onclick = e => { e.currentTarget.href = `/api/report.xlsx?${periodQuery()}`; };
+$('#tp-test').onclick = beep;
 
 $('#timer-pill').onclick = () => { const p = $('#timer-panel'); p.hidden = !p.hidden; };
 $('#tp-start').onclick = () => (T.running ? pauseTimer() : startTimer());
@@ -542,6 +599,12 @@ function fillSettings() {
   fillSettings();
   await loadBoards();
   await loadStats();
-  setInterval(tick, 500);
+  // Tick from a worker: browsers slow page timers in background tabs, which would delay the alarm.
+  try {
+    const src = URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 500)'], { type: 'text/javascript' }));
+    new Worker(src).onmessage = tick;
+  } catch {
+    setInterval(tick, 500);
+  }
   tick();
 })();

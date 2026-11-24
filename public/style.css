@@ -34,6 +34,9 @@ button.danger.primary { color: #fff; }
 #search { width: 200px; }
 #topbar .icon-btn { color: #fff; }
 #topbar .icon-btn:hover { background: #333b4c; }
+#report { color: #fff; text-decoration: none; white-space: nowrap; background: #333b4c; border: 1px solid #465066; border-radius: 6px; padding: 6px 10px; }
+#report:hover { background: #3d4659; }
+#tp-test { margin-top: 10px; width: 100%; }
 #timer-pill { display: flex; align-items: center; gap: 8px; background: #333b4c; border-color: #465066; color: #fff; border-radius: 999px; padding: 6px 14px; max-width: 420px; }
 #timer-pill:hover { background: #3d4659; }
 #timer-pill.running { background: var(--accent); border-color: var(--accent); }
@@ -108,8 +111,17 @@ dialog::backdrop { background: rgba(20, 25, 40, .45); }
 #task-name:focus { border-color: var(--accent); }
 .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
-.swatch { width: 26px; height: 26px; border-radius: 50%; border: 1px solid; padding: 0; }
-.swatch.on { outline: 2px solid var(--ink); outline-offset: 2px; }
+.swatch { display: block; width: 26px; height: 26px; border-radius: 50%; border: 1px solid; }
+.swatch-opt { border: none; background: transparent; padding: 5px 4px; min-width: 44px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; }
+.swatch-opt.on { background: rgba(0, 0, 0, .08); font-weight: 700; }
+.swatch-opt.on .swatch { outline: 2px solid var(--ink); outline-offset: 1px; }
+.swatch-label { max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* colour legend */
+#legend { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 14px 0; overflow-x: auto; }
+.legend-title { color: var(--muted); font-size: 12px; margin-right: 2px; }
+.chip { flex: none; border: 1px solid; border-radius: 999px; padding: 2px 11px; font-size: 12px; }
+.chip:hover { filter: brightness(.95); }
 #task-column, #task-desc, #task-sub-new, #task-min, #ask-input, .sub input[type=text] { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: #fff; }
 #task-column { margin-left: auto; max-width: 180px; }
 #task-desc, #task-sub-new { width: 100%; display: block; resize: vertical; }

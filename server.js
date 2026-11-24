@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const { MongoClient } = require('mongodb');
+const ExcelJS = require('exceljs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 
@@ -59,6 +60,10 @@ app.post('/api/boards', wrap(async (req, res) => {
 app.patch('/api/boards/:id', wrap(async (req, res) => {
   const set = {};
   if (req.body.name !== undefined) set.name = str(req.body.name, 80) || 'Untitled';
+  if (req.body.colorLabels !== undefined) {
+    set.colorLabels = {};
+    for (const c of COLORS) set.colorLabels[c] = str((req.body.colorLabels || {})[c], 30);
+  }
   if (req.body.columns !== undefined) {
     set.columns = cleanColumns(req.body.columns);
     // tasks living in a removed column go away with it
@@ -174,13 +179,96 @@ app.post('/api/timelogs', wrap(async (req, res) => {
   res.status(201).json({ task });
 }));
 
+// Period starts come from the browser so "today" follows the user's clock, not the container's (UTC).
+function periods(query) {
+  const now = new Date();
+  const utcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const ts = (v, def) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? new Date(n) : def; };
+  let tz = str(query.tz, 64) || 'UTC';
+  try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); } catch { tz = 'UTC'; }
+  return {
+    tz,
+    today: ts(query.today, utcDay),
+    week: ts(query.week, new Date(utcDay.getTime() - ((utcDay.getUTCDay() + 6) % 7) * 86400000)),
+    month: ts(query.month, new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))),
+  };
+}
+
+const totals = (logs, since) => logs.filter(l => l.endedAt >= since).reduce(
+  (acc, l) => ({ seconds: acc.seconds + l.seconds, pomodoros: acc.pomodoros + (l.pomodoro ? 1 : 0) }),
+  { seconds: 0, pomodoros: 0 });
+
 app.get('/api/stats', wrap(async (req, res) => {
-  const since = new Date(Number(req.query.since) || Date.now() - 24 * 3600 * 1000);
-  const [row] = await timelogs.aggregate([
-    { $match: { endedAt: { $gte: since } } },
-    { $group: { _id: null, seconds: { $sum: '$seconds' }, pomodoros: { $sum: { $cond: ['$pomodoro', 1, 0] } } } },
-  ]).toArray();
-  res.json({ seconds: row ? row.seconds : 0, pomodoros: row ? row.pomodoros : 0 });
+  const p = periods(req.query);
+  const earliest = new Date(Math.min(p.today, p.week, p.month));
+  const logs = await timelogs.find({ endedAt: { $gte: earliest } }).toArray();
+  res.json({ ...totals(logs, p.today), week: totals(logs, p.week), month: totals(logs, p.month) });
+}));
+
+app.get('/api/report.xlsx', wrap(async (req, res) => {
+  const p = periods(req.query);
+  const earliest = new Date(Math.min(p.today, p.week, p.month));
+  const logs = await timelogs.find({ endedAt: { $gte: earliest } }).sort({ endedAt: 1 }).toArray();
+  const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: p.tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const weekdayFmt = new Intl.DateTimeFormat('en-GB', { timeZone: p.tz, weekday: 'long' });
+  const timeFmt = new Intl.DateTimeFormat('en-GB', { timeZone: p.tz, hour: '2-digit', minute: '2-digit' });
+  const monthFmt = new Intl.DateTimeFormat('en-GB', { timeZone: p.tz, month: 'long', year: 'numeric' });
+  const mins = s => Math.round(s / 60);
+  const hm = s => `${Math.floor(mins(s) / 60)}h ${String(mins(s) % 60).padStart(2, '0')}m`;
+
+  const ids = [...new Set(logs.map(l => l.taskId).filter(Boolean))];
+  const names = new Map((await tasks.find({ _id: { $in: ids } }).toArray()).map(t => [t._id, t.name]));
+  const taskName = id => (id ? names.get(id) || '(deleted task)' : '(no task)');
+
+  const wb = new ExcelJS.Workbook();
+  const sheet = (name, columns) => {
+    const ws = wb.addWorksheet(name);
+    ws.columns = columns.map(([header, width]) => ({ header, width }));
+    ws.getRow(1).font = { bold: true };
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    return ws;
+  };
+
+  const summary = sheet('Summary', [['Period', 16], ['From', 20], ['Pomodoros', 12], ['Focus minutes', 15], ['Focus time', 12]]);
+  for (const [label, since, from] of [
+    ['Today', p.today, dayFmt.format(p.today)],
+    ['This week', p.week, `since ${dayFmt.format(p.week)}`],
+    ['This month', p.month, monthFmt.format(p.month)],
+  ]) {
+    const t = totals(logs, since);
+    summary.addRow([label, from, t.pomodoros, mins(t.seconds), hm(t.seconds)]);
+  }
+
+  const byDay = new Map();
+  for (const l of logs) {
+    const d = byDay.get(dayFmt.format(l.endedAt)) || { seconds: 0, pomodoros: 0 };
+    d.seconds += l.seconds; d.pomodoros += l.pomodoro ? 1 : 0;
+    byDay.set(dayFmt.format(l.endedAt), d);
+  }
+  const daily = sheet('Daily', [['Date', 13], ['Weekday', 13], ['Pomodoros', 12], ['Focus minutes', 15], ['Focus time', 12]]);
+  for (let t = earliest.getTime() + 12 * 3600000; t < p.today.getTime() + 24 * 3600000; t += 86400000) {
+    const key = dayFmt.format(new Date(t)), d = byDay.get(key) || { seconds: 0, pomodoros: 0 };
+    daily.addRow([key, weekdayFmt.format(new Date(t)), d.pomodoros, mins(d.seconds), hm(d.seconds)]);
+  }
+
+  const byTask = sheet('By task', [['Task', 40], ['Pomodoros today', 17], ['Minutes today', 15],
+    ['Pomodoros this week', 20], ['Minutes this week', 18], ['Pomodoros this month', 21], ['Minutes this month', 19]]);
+  for (const id of [...new Set(logs.map(l => l.taskId || null))]) {
+    const own = logs.filter(l => (l.taskId || null) === id);
+    const [d, w, m] = [p.today, p.week, p.month].map(since => totals(own, since));
+    byTask.addRow([taskName(id), d.pomodoros, mins(d.seconds), w.pomodoros, mins(w.seconds), m.pomodoros, mins(m.seconds)]);
+  }
+
+  const log = sheet('Log', [['Date', 13], ['Ended at', 10], ['Task', 40], ['Type', 12], ['Minutes', 10], ['Full pomodoro', 14]]);
+  for (const l of logs) {
+    log.addRow([dayFmt.format(l.endedAt), timeFmt.format(l.endedAt), taskName(l.taskId), l.type, mins(l.seconds), l.pomodoro ? 'yes' : 'no']);
+  }
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="pomodoros-${dayFmt.format(p.today)}.xlsx"`);
+  res.setHeader('Cache-Control', 'no-store');
+  await wb.xlsx.write(res);
+  res.end();
 }));
 
 // ---------- settings ----------
