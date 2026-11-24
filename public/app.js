@@ -218,9 +218,11 @@ function cardEl(t) {
     t.description && el('span', { title: 'Has a description' }, '≡'),
   ].filter(Boolean);
   const card = el('article', {
-    class: `card c-${t.color}${T.taskId === t._id ? ' active' : ''}`, draggable: 'true', 'data-id': t._id,
+    class: `card c-${t.color}${T.taskId === t._id ? ' active' : ''}${state.selected === t._id ? ' selected' : ''}`,
+    draggable: 'true', 'data-id': t._id,
     title: colorLabel(t.color),
-    onclick: () => openTask(t),
+    onclick: () => selectCard(t._id),
+    ondblclick: () => openTask(t),
     ondragstart: e => {
       dragId = t._id;
       e.dataTransfer.effectAllowed = 'move';
@@ -232,11 +234,35 @@ function cardEl(t) {
     el('div', { class: 'card-name' }, t.name),
     meta.length > 0 && el('div', { class: 'card-meta' }, meta),
     el('button', {
+      class: 'card-edit', title: 'Edit task',
+      onclick: e => { e.stopPropagation(); openTask(t); },
+    }, '✎'),
+    el('button', {
+      class: 'card-del', title: 'Delete task',
+      onclick: e => { e.stopPropagation(); deleteTask(t); },
+    }, '🗑'),
+    el('button', {
       class: 'card-play', title: 'Start the timer on this task',
       onclick: e => { e.stopPropagation(); startOn(t); },
     }, '▶'));
   return card;
 }
+
+// Clicking a card selects it; the selected card shows a pencil icon that opens the editor.
+function selectCard(id) {
+  state.selected = id;
+  $$('.card.selected').forEach(c => c.classList.remove('selected'));
+  if (id) $$('.card').filter(c => c.dataset.id === id).forEach(c => c.classList.add('selected'));
+}
+document.addEventListener('click', e => {
+  if (state.selected && !e.target.closest('.card, dialog')) selectCard(null);
+});
+document.addEventListener('keydown', e => {
+  if (!state.selected || e.target.closest('input, textarea, select, dialog')) return;
+  const task = state.tasks.find(t => t._id === state.selected);
+  if (e.key === 'Enter' && task) { e.preventDefault(); openTask(task); }
+  if (e.key === 'Escape') selectCard(null);
+});
 
 function renderBoard() {
   renderLegend();
@@ -391,12 +417,19 @@ async function saveTask(addMore) {
 $('#task-save').onclick = () => saveTask(false);
 $('#task-save-more').onclick = () => saveTask(true);
 $('#task-close').onclick = () => dlg.close();
+// Asks first; returns true when the task was deleted.
+async function deleteTask(task) {
+  if (!(await ask(`Delete "${task.name}"?`, '', { confirm: true, ok: 'Delete', danger: true }))) return false;
+  if (T.taskId === task._id) { T.taskId = null; T.taskName = ''; saveTimer(); }
+  if (state.selected === task._id) state.selected = null;
+  await api('DELETE', `/api/tasks/${task._id}`);
+  await loadTasks();
+  return true;
+}
+
 $('#task-delete').onclick = async () => {
-  if (!(await ask('Delete this task?', '', { confirm: true, ok: 'Delete', danger: true }))) return;
-  if (T.taskId === editing.id) { T.taskId = null; T.taskName = ''; saveTimer(); }
-  await api('DELETE', `/api/tasks/${editing.id}`);
-  dlg.close();
-  loadTasks();
+  const task = state.tasks.find(t => t._id === editing.id);
+  if (task && await deleteTask(task)) dlg.close();
 };
 $('#task-timer').onclick = async () => {
   const task = await saveTask(false);
@@ -578,6 +611,31 @@ async function loadStats() {
 
 $('#report').onclick = e => { e.currentTarget.href = `/api/report.xlsx?${periodQuery()}`; };
 $('#tp-test').onclick = beep;
+
+// ---------- report viewer (same sheets as the Excel file) ----------
+let report = null, reportTab = 0;
+
+function renderReport() {
+  $('#report-tabs').replaceChildren(...report.sheets.map((s, i) => el('button', {
+    class: i === reportTab ? 'on' : '', onclick: () => { reportTab = i; renderReport(); },
+  }, s.name)));
+  const s = report.sheets[reportTab];
+  $('#report-table').replaceChildren(s.rows.length
+    ? el('table', {},
+      el('thead', {}, el('tr', {}, s.columns.map(([header]) => el('th', {}, header)))),
+      el('tbody', {}, s.rows.map(row => el('tr', {},
+        row.map(v => el('td', { class: typeof v === 'number' ? 'num' : '' }, String(v)))))))
+    : el('p', { class: 'empty' }, 'No tracked sessions in this period yet.'));
+  $('#report-table').scrollTop = 0;
+}
+
+$('#report-open').onclick = async () => {
+  report = await api('GET', `/api/report?${periodQuery()}`);
+  reportTab = 0;
+  renderReport();
+  $('#report-dlg').showModal();
+};
+$('#report-close').onclick = () => $('#report-dlg').close();
 
 $('#timer-pill').onclick = () => { const p = $('#timer-panel'); p.hidden = !p.hidden; };
 $('#tp-start').onclick = () => (T.running ? pauseTimer() : startTimer());

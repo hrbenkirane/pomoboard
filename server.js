@@ -205,8 +205,9 @@ app.get('/api/stats', wrap(async (req, res) => {
   res.json({ ...totals(logs, p.today), week: totals(logs, p.week), month: totals(logs, p.month) });
 }));
 
-app.get('/api/report.xlsx', wrap(async (req, res) => {
-  const p = periods(req.query);
+// Builds the report once; the in-app viewer (JSON) and the Excel download share it.
+async function buildReport(query) {
+  const p = periods(query);
   const earliest = new Date(Math.min(p.today, p.week, p.month));
   const logs = await timelogs.find({ endedAt: { $gte: earliest } }).sort({ endedAt: 1 }).toArray();
   const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: p.tz, year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -220,13 +221,11 @@ app.get('/api/report.xlsx', wrap(async (req, res) => {
   const names = new Map((await tasks.find({ _id: { $in: ids } }).toArray()).map(t => [t._id, t.name]));
   const taskName = id => (id ? names.get(id) || '(deleted task)' : '(no task)');
 
-  const wb = new ExcelJS.Workbook();
+  const sheets = [];
   const sheet = (name, columns) => {
-    const ws = wb.addWorksheet(name);
-    ws.columns = columns.map(([header, width]) => ({ header, width }));
-    ws.getRow(1).font = { bold: true };
-    ws.views = [{ state: 'frozen', ySplit: 1 }];
-    return ws;
+    const s = { name, columns, rows: [], addRow(row) { this.rows.push(row); } };
+    sheets.push(s);
+    return s;
   };
 
   const summary = sheet('Summary', [['Period', 16], ['From', 20], ['Pomodoros', 12], ['Focus minutes', 15], ['Focus time', 12]]);
@@ -264,8 +263,25 @@ app.get('/api/report.xlsx', wrap(async (req, res) => {
     log.addRow([dayFmt.format(l.endedAt), timeFmt.format(l.endedAt), taskName(l.taskId), l.type, mins(l.seconds), l.pomodoro ? 'yes' : 'no']);
   }
 
+  return { sheets, filename: `pomodoros-${dayFmt.format(p.today)}.xlsx` };
+}
+
+app.get('/api/report', wrap(async (req, res) => {
+  res.json(await buildReport(req.query));
+}));
+
+app.get('/api/report.xlsx', wrap(async (req, res) => {
+  const { sheets, filename } = await buildReport(req.query);
+  const wb = new ExcelJS.Workbook();
+  for (const s of sheets) {
+    const ws = wb.addWorksheet(s.name);
+    ws.columns = s.columns.map(([header, width]) => ({ header, width }));
+    ws.getRow(1).font = { bold: true };
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    ws.addRows(s.rows);
+  }
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="pomodoros-${dayFmt.format(p.today)}.xlsx"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Cache-Control', 'no-store');
   await wb.xlsx.write(res);
   res.end();

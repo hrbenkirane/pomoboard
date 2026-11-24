@@ -34,8 +34,19 @@ button.danger.primary { color: #fff; }
 #search { width: 200px; }
 #topbar .icon-btn { color: #fff; }
 #topbar .icon-btn:hover { background: #333b4c; }
-#report { color: #fff; text-decoration: none; white-space: nowrap; background: #333b4c; border: 1px solid #465066; border-radius: 6px; padding: 6px 10px; }
-#report:hover { background: #3d4659; }
+#report-open { color: #fff; white-space: nowrap; background: #333b4c; border-color: #465066; }
+#report-open:hover { background: #3d4659; }
+#report { color: #fff; background: var(--ok); text-decoration: none; font-weight: 600; border-radius: 6px; padding: 8px 14px; }
+#report:hover { filter: brightness(.93); }
+#report-dlg { width: min(860px, 94vw); }
+#report-dlg h3 { margin: 0 0 14px; font-size: 18px; }
+#report-table { margin-top: 12px; max-height: 56vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+#report-table table { border-collapse: collapse; width: 100%; }
+#report-table th { position: sticky; top: 0; background: var(--bg); text-align: left; font-size: 12px; white-space: nowrap; }
+#report-table th, #report-table td { padding: 7px 12px; border-bottom: 1px solid var(--line); }
+#report-table tr:last-child td { border-bottom: none; }
+#report-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+#report-table .empty { margin: 0; padding: 24px; text-align: center; color: var(--muted); }
 #tp-test { margin-top: 10px; width: 100%; }
 #timer-pill { display: flex; align-items: center; gap: 8px; background: #333b4c; border-color: #465066; color: #fff; border-radius: 999px; padding: 6px 14px; max-width: 420px; }
 #timer-pill:hover { background: #3d4659; }
@@ -82,7 +93,13 @@ button.danger.primary { color: #fff; }
 .card-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; font-size: 12px; color: #5a6172; }
 .card-play { position: absolute; top: 5px; right: 4px; border: none; background: transparent; padding: 3px 6px; font-size: 11px; opacity: 0; border-radius: 50%; }
 .card:hover .card-play, .card.active .card-play { opacity: .75; }
-.card-play:hover { opacity: 1 !important; background: rgba(0, 0, 0, .1); }
+.card-play:hover, .card-edit:hover, .card-del:hover { opacity: 1 !important; background: rgba(0, 0, 0, .1); }
+.card.selected { box-shadow: 0 0 0 2px #2f6fed, 0 3px 10px rgba(47, 111, 237, .35); padding-right: 80px; }
+.card-del { display: none; position: absolute; top: 4px; right: 50px; border: none; background: transparent; padding: 2px 5px; font-size: 12px; opacity: .8; border-radius: 50%; }
+.card.selected .card-del { display: block; }
+.card.selected .card-play { opacity: .75; }
+.card-edit { display: none; position: absolute; top: 4px; right: 27px; border: none; background: transparent; padding: 2px 6px; font-size: 13px; opacity: .8; border-radius: 50%; }
+.card.selected .card-edit { display: block; }
 
 .c-yellow { background: #fffbd1; border-color: #e3c53c; }
 .c-orange { background: #ffe6bd; border-color: #eda93a; }

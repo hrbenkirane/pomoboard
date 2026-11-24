@@ -14,7 +14,7 @@
     <button id="board-menu" class="icon-btn" title="Board options">⋯</button>
     <input id="search" type="search" placeholder="Filter tasks…">
     <div class="spacer"></div>
-    <a id="report" href="/api/report.xlsx" download title="Download pomodoros for today, this week and this month as an Excel file">📊 Excel report</a>
+    <button id="report-open" title="Pomodoros for today, this week and this month">📊 Report</button>
     <button id="timer-pill" title="Timer">
       <span id="pill-icon">▶</span>
       <span id="pill-time">25:00</span>
@@ -74,6 +74,17 @@
       <div class="spacer"></div>
       <button id="task-save-more">Save &amp; add more<small>Ctrl + Shift + Enter</small></button>
       <button id="task-save" class="primary">Save &amp; close<small>Ctrl + Enter</small></button>
+    </div>
+  </dialog>
+
+  <dialog id="report-dlg">
+    <button class="dlg-close icon-btn" id="report-close" title="Close (Esc)">✕</button>
+    <h3>Pomodoro report</h3>
+    <div class="tabs" id="report-tabs"></div>
+    <div id="report-table"></div>
+    <div class="dlg-actions">
+      <div class="spacer"></div>
+      <a id="report" href="/api/report.xlsx" download>⬇ Download Excel file</a>
     </div>
   </dialog>
 
