@@ -609,7 +609,19 @@ async function loadStats() {
   renderTimer();
 }
 
-$('#report').onclick = e => { e.currentTarget.href = `/api/report.xlsx?${periodQuery()}`; };
+// Ask before leaving: closing the tab, reloading or navigating away needs a confirmation.
+let skipLeavePrompt = false;
+window.addEventListener('beforeunload', e => {
+  if (skipLeavePrompt) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+$('#report').onclick = e => {
+  e.currentTarget.href = `/api/report.xlsx?${periodQuery()}`;
+  skipLeavePrompt = true; // downloading the Excel file is not leaving the app
+  setTimeout(() => (skipLeavePrompt = false), 1500);
+};
 $('#tp-test').onclick = beep;
 
 // ---------- report viewer (same sheets as the Excel file) ----------

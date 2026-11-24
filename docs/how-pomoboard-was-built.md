@@ -17,7 +17,7 @@ The request was a self-hosted replacement for an online kanban tool, with four r
 3. A NoSQL database to store the to-do list.
 4. Docker packaging so the app is running whenever the PC is on.
 
-Later requests added colour meanings, an alarm sound, an Excel report with an in-app viewer, and select / edit / delete icons on cards. They are covered in section 10.
+Later requests added colour meanings, an alarm sound, an Excel report with an in-app viewer, select / edit / delete icons on cards, and a confirmation before leaving the app. They are covered in section 10.
 
 ## 2. Technology choices
 
@@ -159,6 +159,12 @@ The report logic was moved into one function, `buildReport`, used by both the Ex
 
 ### Select, edit and delete icons
 Clicking a card now selects it instead of opening it. The selected card gets a blue outline and three icons: delete, edit and start timer. Delete always asks for confirmation first.
+
+### Confirmation before leaving
+Closing the tab, reloading the page or navigating away now needs a confirmation. The page listens for the browser's `beforeunload` event and asks the browser to show its "Leave site?" dialog. Two things to know:
+
+- The wording of that dialog belongs to the browser and cannot be changed by the app.
+- Browsers only show it after the page has been clicked or typed in at least once. Downloading the Excel report is excluded, because that is not leaving the app.
 
 ## 11. How it was tested
 
