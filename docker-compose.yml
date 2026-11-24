@@ -1,0 +1,30 @@
+name: pomoboard
+
+services:
+  app:
+    build: .
+    container_name: pomoboard
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8790:8790"
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:7
+    container_name: pomoboard-mongo
+    restart: unless-stopped
+    volumes:
+      - pomoboard-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pomoboard-data:

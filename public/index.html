@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PomoBoard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='17' r='12' fill='%23e5484d'/><path d='M16 5c2-3 5-3 7-2-2 1-4 2-5 4z' fill='%2330a46c'/></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">🍅 PomoBoard</div>
+    <select id="board-select" title="Switch board"></select>
+    <button id="board-menu" class="icon-btn" title="Board options">⋯</button>
+    <input id="search" type="search" placeholder="Filter tasks…">
+    <div class="spacer"></div>
+    <button id="timer-pill" title="Timer">
+      <span id="pill-icon">▶</span>
+      <span id="pill-time">25:00</span>
+      <span id="pill-task"></span>
+    </button>
+  </header>
+
+  <section id="timer-panel" hidden>
+    <div class="tabs">
+      <button data-mode="pomodoro">Pomodoro</button>
+      <button data-mode="stopwatch">Stopwatch</button>
+    </div>
+    <div id="tp-phase">Focus</div>
+    <div id="tp-time">25:00</div>
+    <div id="tp-task">No task selected</div>
+    <div class="tp-ctl">
+      <button id="tp-start" class="primary">Start</button>
+      <button id="tp-stop">Stop &amp; log</button>
+    </div>
+    <div id="tp-stats"></div>
+    <details>
+      <summary>Timer settings</summary>
+      <div class="settings-grid">
+        <label>Pomodoro (min)<input type="number" min="1" max="180" data-setting="pomodoro"></label>
+        <label>Short break (min)<input type="number" min="1" max="60" data-setting="shortBreak"></label>
+        <label>Long break (min)<input type="number" min="1" max="120" data-setting="longBreak"></label>
+        <label>Long break every<input type="number" min="1" max="12" data-setting="longEvery"></label>
+      </div>
+    </details>
+  </section>
+
+  <main id="board"></main>
+
+  <div id="menu" hidden></div>
+  <div id="toast" hidden></div>
+
+  <dialog id="task-dlg">
+    <button class="dlg-close icon-btn" id="task-close" title="Close (Esc)">✕</button>
+    <input id="task-name" placeholder="Task name…" maxlength="300" autocomplete="off">
+    <div class="row">
+      <div id="task-colors" class="swatches"></div>
+      <select id="task-column" title="Column"></select>
+    </div>
+    <textarea id="task-desc" placeholder="Description…" rows="4"></textarea>
+    <div class="section-label">Subtasks</div>
+    <div id="task-subs"></div>
+    <input id="task-sub-new" placeholder="Add a subtask and press Enter" maxlength="300" autocomplete="off">
+    <div id="task-time-row" class="row">
+      <label>Time spent (minutes) <input id="task-min" type="number" min="0"></label>
+      <span id="task-pomos"></span>
+    </div>
+    <div class="dlg-actions">
+      <button id="task-delete" class="danger">Delete</button>
+      <button id="task-timer">▶ Start timer</button>
+      <div class="spacer"></div>
+      <button id="task-save-more">Save &amp; add more<small>Ctrl + Shift + Enter</small></button>
+      <button id="task-save" class="primary">Save &amp; close<small>Ctrl + Enter</small></button>
+    </div>
+  </dialog>
+
+  <dialog id="ask">
+    <form method="dialog">
+      <h3 id="ask-title"></h3>
+      <input id="ask-input" maxlength="80" autocomplete="off">
+      <div class="dlg-actions">
+        <div class="spacer"></div>
+        <button type="button" id="ask-cancel">Cancel</button>
+        <button id="ask-ok" class="primary" value="ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
